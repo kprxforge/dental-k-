@@ -1,0 +1,99 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // -------------------------------------------------------------------------
+    // 3. PRIMITIVES & HELPERS
+    // -------------------------------------------------------------------------
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    function isEmailVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function matchesId(userId) { return isSignedIn() && request.auth.uid == userId; }
+    
+    // Auth tokens do not contain roles. Roles must be verified against the users collection.
+    // However, to avoid circular get() calls, we assume a user's role is stored in their document.
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isAdmin() { return isSignedIn() && getRole() == 'admin'; }
+    function isDoctor() { return isSignedIn() && getRole() == 'doctor'; }
+
+    // DEFAULT DENY
+    match /{document=**} { allow read, write: if false; }
+
+    // -------------------------------------------------------------------------
+    // USERS COLLECTION
+    // -------------------------------------------------------------------------
+    function isValidUser(data) {
+      return data.keys().hasAll(['userId', 'name', 'email', 'role', 'createdAt']) &&
+             data.userId is string && data.name is string && data.email is string &&
+             data.role in ['patient', 'doctor', 'admin'] &&
+             data.createdAt == request.time;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn(); // Allow profile lookups (e.g. for booking)
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && matchesId(userId) && isValidUser(incoming()) && incoming().role == 'patient'; // Only patients can self-register
+      allow update: if (isSignedIn() && matchesId(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'photoURL'])) || isAdmin();
+      
+      match /private/records {
+        allow read: if matchesId(userId) || isDoctor() || isAdmin();
+        allow write: if isDoctor() || isAdmin();
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // APPOINTMENTS
+    // -------------------------------------------------------------------------
+    function isValidAppointment(data) {
+      return data.keys().hasAll(['patientId', 'doctorId', 'treatmentId', 'date', 'timeSlot', 'status', 'createdAt']) &&
+             data.patientId is string && data.doctorId is string && data.status in ['pending', 'confirmed', 'completed', 'cancelled'] &&
+             data.createdAt == request.time;
+    }
+
+    match /appointments/{appointmentId} {
+      allow list: if isSignedIn() && (resource.data.patientId == request.auth.uid || isDoctor() || isAdmin());
+      allow get: if isSignedIn() && (resource.data.patientId == request.auth.uid || isDoctor() || isAdmin());
+      allow create: if isSignedIn() && incoming().patientId == request.auth.uid && isValidAppointment(incoming());
+      allow update: if isSignedIn() && (
+        (matchesId(existing().patientId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes']) && incoming().status == 'cancelled') ||
+        (isDoctor() && incoming().diff(existing()).affectedKeys().hasOnly(['notes', 'status'])) ||
+        isAdmin()
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // DOCTORS & TREATMENTS (Publicly Readable)
+    // -------------------------------------------------------------------------
+    match /doctors/{doctorId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /treatments/{treatmentId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // REPORTS & INVOICES
+    // -------------------------------------------------------------------------
+    match /reports/{reportId} {
+      allow read: if isSignedIn() && (resource.data.patientId == request.auth.uid || isDoctor() || isAdmin());
+      allow write: if isDoctor() || isAdmin();
+    }
+    match /invoices/{invoiceId} {
+      allow read: if isSignedIn() && (resource.data.patientId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // CONFIG
+    // -------------------------------------------------------------------------
+    match /config/website {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

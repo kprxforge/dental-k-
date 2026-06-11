@@ -1,0 +1,123 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Standard user profile including PII for authenticated users.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["patient", "doctor", "admin"] },
+        "phone": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "email", "role"]
+    },
+    "PatientRecord": {
+      "title": "Patient Record",
+      "description": "Sensitive medical history and private data.",
+      "type": "object",
+      "properties": {
+        "medicalHistory": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" }
+      }
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "A scheduled visit for a patient with a doctor.",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string" },
+        "doctorId": { "type": "string" },
+        "treatmentId": { "type": "string" },
+        "date": { "type": "string" },
+        "timeSlot": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "completed", "cancelled"] },
+        "notes": { "type": "string" },
+        "room": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "doctorId", "treatmentId", "date", "timeSlot", "status"]
+    },
+    "Doctor": {
+      "title": "Doctor Specialist",
+      "description": "Public profile and scheduling for doctors.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "specialty": { "type": "string" },
+        "bio": { "type": "string" },
+        "image": { "type": "string" },
+        "schedule": { "type": "object" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["userId", "name", "specialty"]
+    },
+    "Treatment": {
+      "title": "Treatment Offering",
+      "description": "Details about a dental service.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "image": { "type": "string" },
+        "duration": { "type": "string" }
+      },
+      "required": ["name", "price"]
+    },
+    "Report": {
+      "title": "Medical Report",
+      "description": "Scans, X-rays, and prescriptions for a patient.",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string" },
+        "doctorId": { "type": "string" },
+        "type": { "type": "string", "enum": ["xray", "scan", "prescription", "lab"] },
+        "fileName": { "type": "string" },
+        "url": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "doctorId", "type", "url", "date"]
+    },
+    "Invoice": {
+      "title": "Financial Invoice",
+      "description": "Payment record for an appointment.",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string" },
+        "appointmentId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["unpaid", "paid"] },
+        "method": { "type": "string" },
+        "items": { "type": "array" },
+        "date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "amount", "status", "date"]
+    },
+    "WebsiteConfig": {
+      "title": "Website Configuration",
+      "description": "CMS settings for the public website.",
+      "type": "object",
+      "properties": {
+        "hero": { "type": "object" },
+        "wallpaper": { "type": "object" },
+        "announcement": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}": { "schema": "User", "description": "Global user profiles" },
+    "users/{userId}/private/records": { "schema": "PatientRecord", "description": "Private medical history" },
+    "appointments/{appointmentId}": { "schema": "Appointment", "description": "Global appointments" },
+    "doctors/{doctorId}": { "schema": "Doctor", "description": "Doctor profiles" },
+    "treatments/{treatmentId}": { "schema": "Treatment", "description": "Available treatments" },
+    "reports/{reportId}": { "schema": "Report", "description": "Medical reports" },
+    "invoices/{invoiceId}": { "schema": "Invoice", "description": "Financial records" },
+    "config/website": { "schema": "WebsiteConfig", "description": "Global website settings" }
+  }
+}
